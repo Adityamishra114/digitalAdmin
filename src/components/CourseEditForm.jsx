@@ -21,15 +21,19 @@ const CourseEditForm = () => {
     handleSubmit,
     watch,
     reset,
+    setValue,
     formState: { errors },
   } = useForm();
 
   const type = watch("type");
 
+  const [imagePreview, setImagePreview] = useState(null);
   const [videoPreview, setVideoPreview] = useState(null);
+  const [brochurePreview, setBrochurePreview] = useState(null);
+
+  const [imageFile, setImageFile] = useState(null);
   const [videoFile, setVideoFile] = useState(null);
   const [brochureFile, setBrochureFile] = useState(null);
-  const [imageFile, setImageFile] = useState(null);
 
   useEffect(() => {
     dispatch(fetchCourseById(courseId));
@@ -44,30 +48,74 @@ const CourseEditForm = () => {
         includes: (course.includes || []).join(", "),
         requirements: (course.requirements || []).join(", "),
       });
+
+      // Load previews from DB URLs
+      setImagePreview(course.image || null);
       setVideoPreview(course.previewVideo || null);
+      setBrochurePreview(course.downloadBrochure || null);
     }
   }, [course, reset]);
 
-  const preparePayload = (data) => {
-    const payload = {
-      ...data,
-      whatYouWillLearn: data.whatYouWillLearn?.split(",").map((s) => s.trim()) || [],
-      topics: data.topics?.split(",").map((s) => s.trim()) || [],
-      includes: data.includes?.split(",").map((s) => s.trim()) || [],
-      requirements: data.requirements?.split(",").map((s) => s.trim()) || [],
-    };
+const customSplit = (input) => {
+  const result = [];
+  let current = '';
+  let depth = 0;
 
-    const formData = new FormData();
-    Object.entries(payload).forEach(([key, value]) => {
-      formData.append(key, Array.isArray(value) ? JSON.stringify(value) : value);
-    });
+  for (const char of input) {
+    if (char === ',' && depth === 0) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      if (char === '(') depth++;
+      if (char === ')') depth--;
+      current += char;
+    }
+  }
 
-    if (videoFile) formData.append("previewVideo", videoFile);
-    if (brochureFile) formData.append("downloadBrochure", brochureFile);
-    if (imageFile) formData.append("image", imageFile);
+  if (current) result.push(current.trim());
+  return result.filter(Boolean);
+};
+const preparePayload = (data, imageFile, videoFile, brochureFile, course = {}) => {
+  const fieldsToSplit = ["whatYouWillLearn", "topics", "includes", "requirements"];
+  const payload = { ...data };
+  fieldsToSplit.forEach((field) => {
+    const value = data[field];
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        payload[field] = Array.isArray(parsed) ? parsed : customSplit(value);
+      } catch {
+        payload[field] = customSplit(value);
+      }
+    }
+  });
 
-    return formData;
-  };
+  const formData = new FormData();
+  Object.entries(payload).forEach(([key, value]) => {
+    const finalValue = Array.isArray(value) ? JSON.stringify(value) : value;
+    formData.append(key, finalValue);
+  });
+  if (imageFile) {
+    formData.append("image", imageFile);
+    if (course.image) {
+      formData.append("oldImageUrl", course.image);
+    }
+  }
+  if (videoFile) {
+    formData.append("previewVideo", videoFile);
+    if (course.previewVideo) {
+      formData.append("oldVideoUrl", course.previewVideo);
+    }
+  }
+  if (brochureFile) {
+    formData.append("downloadBrochure", brochureFile);
+    if (course.downloadBrochure) {
+      formData.append("oldBrochureUrl", course.downloadBrochure);
+    }
+  }
+
+  return formData;
+};
 
   const onSubmit = async (data) => {
     try {
@@ -96,7 +144,6 @@ const CourseEditForm = () => {
                 placeholder="Course Title"
               />
             </div>
-
             <div>
               <label className="block font-semibold text-gray-700 mb-1">Subtitle</label>
               <input
@@ -104,16 +151,26 @@ const CourseEditForm = () => {
                 className="w-full border border-gray-300 px-3 py-2 rounded-md"
               />
             </div>
-
             <div>
               <label className="block font-semibold text-gray-700 mb-1">Course Image</label>
               <input
                 type="file"
-                onChange={(e) => setImageFile(e.target.files[0])}
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  setImageFile(file);
+                  setImagePreview(URL.createObjectURL(file));
+                }}
                 className="w-full border border-gray-300 px-3 py-2 rounded-md"
               />
+              {imagePreview && (
+                <img
+                  src={imagePreview}
+                  alt="Course preview"
+                  className="mt-2 w-64 h-auto rounded-md border"
+                />
+              )}
             </div>
-
             <div>
               <label className="block font-semibold text-gray-700 mb-1">Category</label>
               <input
@@ -136,12 +193,18 @@ const CourseEditForm = () => {
                     className="w-full border border-gray-300 px-3 py-2 rounded-md"
                   />
                   {videoPreview && (
-                    <video src={videoPreview} controls className="mt-3 w-full rounded-md border" />
+                    <video
+                      src={videoPreview}
+                      controls
+                      className="mt-2 w-full rounded-md border"
+                    />
                   )}
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-gray-700 mb-1">What You Will Learn</label>
+                  <label className="block font-semibold text-gray-700 mb-1">
+                    What You Will Learn
+                  </label>
                   <input
                     {...register("whatYouWillLearn")}
                     placeholder="Comma-separated list"
@@ -190,10 +253,29 @@ const CourseEditForm = () => {
                 <label className="block font-semibold text-gray-700 mb-1">Brochure (PDF)</label>
                 <input
                   type="file"
-                  accept=".pdf"
-                  onChange={(e) => setBrochureFile(e.target.files[0])}
+                  accept="application/pdf"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    setBrochureFile(file);
+                    setBrochurePreview({ name: file.name, url: URL.createObjectURL(file) });
+                  }}
                   className="w-full border border-gray-300 px-3 py-2 rounded-md"
                 />
+                {brochurePreview && (
+                  <div className="mt-2">
+                    <p className="text-sm font-medium">
+                      📄 {brochurePreview.name || brochurePreview.split("/").pop()}
+                    </p>
+                    <a
+                      href={brochurePreview.url || brochurePreview}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline text-sm"
+                    >
+                      🔗 Open Brochure
+                    </a>
+                  </div>
+                )}
               </div>
             )}
             <div>
@@ -203,7 +285,6 @@ const CourseEditForm = () => {
                 className="w-full border border-gray-300 px-3 py-2 rounded-md"
               />
             </div>
-
             <div>
               <label className="block font-semibold text-gray-700 mb-1">Description</label>
               <textarea
@@ -212,7 +293,6 @@ const CourseEditForm = () => {
                 className="w-full border border-gray-300 px-3 py-2 rounded-md"
               />
             </div>
-
             <div className="pt-4">
               <button
                 type="submit"

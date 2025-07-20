@@ -1,16 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchAllCourseStudents } from '../store/courseStudentSlice';
-// import { submitFinalTest, updateFinalTest } from '../store/testSlice'; // optionally include if needed
 
-const TestEditForm = ({ initialData = null, onSubmit }) => {
+const TestEditForm = ({ onSubmit }) => {
   const dispatch = useDispatch();
   const courses = useSelector((state) => state.courseStudent.enrolledCourses || []);
 
-  const [selectedCourse, setSelectedCourse] = useState(initialData?.courseId || '');
-  const [testName, setTestName] = useState(initialData?.finalTest?.name || 'Final Course Test');
-  const [questions, setQuestions] = useState(initialData?.finalTest?.questions || []);
-
+  const [selectedCourseTitle, setSelectedCourseTitle] = useState('');
+  const [testName, setTestName] = useState('Final Course Test');
+  const [questions, setQuestions] = useState([]);
+  const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(0);
   const [newQuestion, setNewQuestion] = useState({
     question: '',
     options: ['', '', ''],
@@ -22,26 +21,61 @@ const TestEditForm = ({ initialData = null, onSubmit }) => {
     dispatch(fetchAllCourseStudents());
   }, [dispatch]);
 
-  const selectedCourseTitle = courses.find((c) => c._id === selectedCourse)?.title || '';
+  // Load test from selected course
+  useEffect(() => {
+    if (selectedCourseTitle && courses.length > 0) {
+      const course = courses.find((c) => c.title === selectedCourseTitle);
+      if (course) {
+        const test = course.finalTest || {};
+        setTestName(test.name || 'Final Course Test');
+        setQuestions(test.questions || []);
+        setSelectedQuestionIndex(0);
+      }
+    }
+  }, [selectedCourseTitle, courses]);
+
+  // Load selected question
+  useEffect(() => {
+    const q = questions[selectedQuestionIndex];
+    if (q) {
+      const answerIndexes = Array.isArray(q.answer)
+        ? q.answer.map((ans) => q.options.indexOf(ans))
+        : [q.options.indexOf(q.answer)];
+
+      setNewQuestion({
+        question: q.question || '',
+        options: [...q.options],
+        answerIndex: answerIndexes,
+        type: q.type || 'single',
+      });
+    } else {
+      setNewQuestion({
+        question: '',
+        options: ['', '', ''],
+        answerIndex: [],
+        type: 'single',
+      });
+    }
+  }, [selectedQuestionIndex, questions]);
 
   const handleOptionChange = (index, value) => {
-    const updatedOptions = [...newQuestion.options];
-    updatedOptions[index] = value;
-    setNewQuestion((prev) => ({ ...prev, options: updatedOptions }));
+    const updated = [...newQuestion.options];
+    updated[index] = value;
+    setNewQuestion({ ...newQuestion, options: updated });
   };
 
   const handleAnswerChange = (index) => {
     if (newQuestion.type === 'single') {
-      setNewQuestion((prev) => ({ ...prev, answerIndex: [index] }));
+      setNewQuestion({ ...newQuestion, answerIndex: [index] });
     } else {
-      const updated = new Set(newQuestion.answerIndex);
-      updated.has(index) ? updated.delete(index) : updated.add(index);
-      setNewQuestion((prev) => ({ ...prev, answerIndex: Array.from(updated) }));
+      const setAnswers = new Set(newQuestion.answerIndex);
+      setAnswers.has(index) ? setAnswers.delete(index) : setAnswers.add(index);
+      setNewQuestion({ ...newQuestion, answerIndex: [...setAnswers] });
     }
   };
 
   const handleAddOption = () => {
-    setNewQuestion((prev) => ({ ...prev, options: [...prev.options, ''] }));
+    setNewQuestion({ ...newQuestion, options: [...newQuestion.options, ''] });
   };
 
   const handleRemoveOption = (index) => {
@@ -49,42 +83,64 @@ const TestEditForm = ({ initialData = null, onSubmit }) => {
     const updatedAnswers = newQuestion.answerIndex
       .filter((i) => i !== index)
       .map((i) => (i > index ? i - 1 : i));
-    setNewQuestion((prev) => ({
-      ...prev,
+
+    setNewQuestion({
+      ...newQuestion,
       options: updatedOptions,
       answerIndex: updatedAnswers,
-    }));
+    });
   };
 
-  const handleAddQuestion = () => {
+  const handleSaveQuestion = () => {
     const { question, options, answerIndex, type } = newQuestion;
     const cleanedOptions = options.filter((opt) => opt.trim());
 
     if (!question.trim() || cleanedOptions.length < 2 || answerIndex.length === 0) {
-      alert('Please fill in all question details correctly.');
+      alert('Please fill all required fields.');
       return;
     }
 
     const answers = answerIndex.map((i) => cleanedOptions[i]);
 
-    setQuestions((prev) => [
-      ...prev,
-      {
-        question: question.trim(),
-        options: cleanedOptions,
-        answer: type === 'single' ? answers[0] : answers,
-        selectedAnswer: '',
-        isCorrect: false,
-        type,
-      },
-    ]);
+    const updated = {
+      question: question.trim(),
+      options: cleanedOptions,
+      answer: type === 'single' ? answers[0] : answers,
+      selectedAnswer: '',
+      isCorrect: false,
+      type,
+    };
 
-    setNewQuestion({ question: '', options: ['', '', ''], answerIndex: [], type });
+    const updatedList = [...questions];
+    updatedList[selectedQuestionIndex] = updated;
+    setQuestions(updatedList);
+  };
+
+  const handleAddNewQuestion = () => {
+    handleSaveQuestion();
+    const newQ = {
+      question: '',
+      options: ['', '', ''],
+      answer: '',
+      selectedAnswer: '',
+      isCorrect: false,
+      type: 'single',
+    };
+    setQuestions([...questions, newQ]);
+    setSelectedQuestionIndex(questions.length);
   };
 
   const handleSubmit = () => {
-    if (!selectedCourse || questions.length === 0) {
-      alert('Please select a course and add at least one question.');
+    if (!selectedCourseTitle || questions.length === 0) {
+      alert('Course and questions are required.');
+      return;
+    }
+
+    handleSaveQuestion();
+
+    const courseObj = courses.find((c) => c.title === selectedCourseTitle);
+    if (!courseObj) {
+      alert('Invalid course selected');
       return;
     }
 
@@ -97,32 +153,28 @@ const TestEditForm = ({ initialData = null, onSubmit }) => {
     };
 
     const payload = {
-      courseId: selectedCourse,
+      courseId: courseObj._id,
       finalTest,
     };
 
-    console.log('Submitting payload:', payload);
     if (onSubmit) onSubmit(payload);
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 bg-white shadow-lg rounded-lg space-y-8">
-      <h2 className="text-3xl font-bold text-center text-gray-800">
-        {initialData ? 'Edit Final Test' : 'Create Final Test'}
-        {selectedCourseTitle && ` - ${selectedCourseTitle}`}
-      </h2>
+    <div className="max-w-5xl mx-auto px-4 py-8 bg-white shadow-lg rounded-lg space-y-6">
+      <h2 className="text-3xl font-bold text-center text-gray-800">Edit Final Test</h2>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div>
           <label className="block font-semibold mb-1">Select Course</label>
           <select
             className="w-full border rounded p-2"
-            value={selectedCourse}
-            onChange={(e) => setSelectedCourse(e.target.value)}
+            value={selectedCourseTitle}
+            onChange={(e) => setSelectedCourseTitle(e.target.value)}
           >
             <option value="">-- Select Course --</option>
             {courses.map((course) => (
-              <option key={course._id} value={course._id}>
+              <option key={course._id} value={course.title}>
                 {course.title}
               </option>
             ))}
@@ -136,27 +188,41 @@ const TestEditForm = ({ initialData = null, onSubmit }) => {
             className="w-full border rounded p-2"
             value={testName}
             onChange={(e) => setTestName(e.target.value)}
-            placeholder="e.g. Final Course Test"
           />
         </div>
       </div>
 
-      {selectedCourse && (
+      {selectedCourseTitle && (
         <>
-          <div className="space-y-4">
-            <h3 className="text-xl font-semibold text-gray-700">Add Question</h3>
+          <div className="flex flex-wrap items-center gap-4 mt-4">
+            <label className="font-semibold">Question:</label>
+            <select
+              className="border p-2 rounded"
+              value={selectedQuestionIndex}
+              onChange={(e) => setSelectedQuestionIndex(Number(e.target.value))}
+            >
+              {questions.map((_, idx) => (
+                <option key={idx} value={idx}>
+                  Q{idx + 1}
+                </option>
+              ))}
+            </select>
+            <button onClick={handleAddNewQuestion} className="text-blue-600 underline">
+              + Add New Question
+            </button>
+            <p className="text-gray-500">Total: {questions.length}</p>
+          </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              <label className="font-semibold">Type:</label>
+          <div className="space-y-4 mt-4">
+            <h3 className="text-xl font-semibold">Edit Question</h3>
+
+            <div className="flex gap-4 items-center">
+              <label>Type:</label>
               <select
-                className="border rounded p-2"
                 value={newQuestion.type}
+                className="border p-2 rounded"
                 onChange={(e) =>
-                  setNewQuestion((prev) => ({
-                    ...prev,
-                    type: e.target.value,
-                    answerIndex: [],
-                  }))
+                  setNewQuestion({ ...newQuestion, type: e.target.value, answerIndex: [] })
                 }
               >
                 <option value="single">Single Select</option>
@@ -165,8 +231,9 @@ const TestEditForm = ({ initialData = null, onSubmit }) => {
             </div>
 
             <textarea
-              className="w-full border rounded p-3 h-24"
-              placeholder="Enter question here..."
+              className="w-full border p-3 rounded"
+              rows={3}
+              placeholder="Enter question..."
               value={newQuestion.question}
               onChange={(e) =>
                 setNewQuestion((prev) => ({ ...prev, question: e.target.value }))
@@ -202,7 +269,7 @@ const TestEditForm = ({ initialData = null, onSubmit }) => {
               ))}
             </div>
 
-            <div className="flex flex-wrap gap-3 mt-4">
+            <div className="flex gap-3 mt-4">
               <button
                 onClick={handleAddOption}
                 className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-4 py-2 rounded"
@@ -210,38 +277,19 @@ const TestEditForm = ({ initialData = null, onSubmit }) => {
                 + Add Option
               </button>
               <button
-                onClick={handleAddQuestion}
+                onClick={handleSaveQuestion}
                 className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded"
               >
-                Add Question
+                Save Question
               </button>
             </div>
           </div>
 
-          {questions.length > 0 && (
-            <div>
-              <h4 className="text-lg font-semibold text-gray-700 mt-8 mb-4">Questions Added</h4>
-              {questions.map((q, i) => (
-                <div
-                  key={i}
-                  className="border border-gray-300 rounded p-4 mb-3 bg-gray-50 shadow-sm"
-                >
-                  <p className="font-semibold">Q{i + 1}: {q.question}</p>
-                  <p>
-                    <span className="font-medium">Type:</span> {q.type === 'multi' ? 'Multiple Select' : 'Single Select'}
-                  </p>
-                  <p><span className="font-medium">Options:</span> {q.options.join(', ')}</p>
-                  <p><span className="font-medium">Answer:</span> {Array.isArray(q.answer) ? q.answer.join(', ') : q.answer}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
           <button
             onClick={handleSubmit}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded text-lg font-semibold mt-4"
+            className="w-full bg-primary hover:bg-indigo-700 text-white py-3 rounded mt-6 text-lg"
           >
-            {initialData ? 'Update Final Test' : 'Submit Final Test'}
+            Update Final Test
           </button>
         </>
       )}

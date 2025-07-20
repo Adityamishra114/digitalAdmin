@@ -9,10 +9,10 @@ import {
   FiChevronDown,
   FiChevronRight,
   FiUser,
+  FiEdit,
 } from "react-icons/fi";
 import { Link, useLocation } from "react-router-dom";
-import logo from "../assets/logo.png";
-
+import Logo from "/assets/logo.png"
 const Sidebar = () => {
   const location = useLocation();
 
@@ -22,6 +22,7 @@ const Sidebar = () => {
   const [isCourseOpen, setIsCourseOpen] = useState(false);
   const [isCourseStudentOpen, setIsCourseStudentOpen] = useState(false);
   const [isCourseTestOpen, setIsCourseTestOpen] = useState(false);
+  const [isBlogOpen, setIsBlogOpen] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -58,7 +59,7 @@ const Sidebar = () => {
       } flex flex-col shadow-md sticky top-0`}
     >
       <div className="flex items-center justify-between p-4">
-        {showText && !isMobile && <img src={logo} alt="Logo" className="h-8 w-auto" />}
+        {showText && !isMobile && <img src={Logo} alt="Logo" className="h-8 w-auto" />}
         {!isMobile && (
           <button onClick={toggleSidebar} className="text-primary ml-auto">
             <FiMenu size={20} />
@@ -214,6 +215,45 @@ const Sidebar = () => {
             </div>
           )}
         </div>
+        <div {...dropdownHandlers(setIsBlogOpen)}>
+  <button
+    onClick={() => setIsBlogOpen(!isBlogOpen)}
+    className={`flex items-center w-full p-2 rounded-md transition ${linkStyle(
+      "/admin/blogs"
+    )}`}
+  >
+    <FiEdit size={20} />
+    {showText && (
+      <>
+        <span className="ml-3">Blog</span>
+        <span className="ml-auto">
+          {isBlogOpen ? <FiChevronDown /> : <FiChevronRight />}
+        </span>
+      </>
+    )}
+  </button>
+  {(isBlogOpen && showText) && (
+    <div className="ml-8 mt-1 space-y-1">
+      <Link
+        to="/admin/blogs/add"
+        className={`flex items-center text-sm p-2 rounded-md transition ${linkStyle(
+          "/admin/blogs/add"
+        )}`}
+      >
+        <span>Blog Add</span>
+      </Link>
+      <Link
+        to="/admin/blogs/list"
+        className={`flex items-center text-sm p-2 rounded-md transition ${linkStyle(
+          "/admin/blogs/list"
+        )}`}
+      >
+        <span>Blog List</span>
+      </Link>
+    </div>
+  )}
+</div>
+
         <Link
           to="/admin/payments"
           className={`flex items-center p-2 rounded-md transition ${linkStyle(
@@ -232,6 +272,7 @@ const Sidebar = () => {
           <FiAward size={20} />
           {showText && <span className="ml-3">Certificate</span>}
         </Link>
+
       </nav>
     </div>
   );

@@ -12,17 +12,17 @@ axiosInstance.interceptors.request.use(
   (config) => {
     const state = store.getState();
     const token = state.auth?.token;
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    } else {
-      delete config.headers.Authorization;
     }
 
-    const isFormData =
-      config.data instanceof FormData ||
-      (config.headers && config.headers["Content-Type"] === "multipart/form-data");
+    const isFormData = config.data instanceof FormData;
+
     if (isFormData) {
-      delete config.headers["Content-Type"];
+      if (config.headers && config.headers["Content-Type"]) {
+        delete config.headers["Content-Type"];
+      }
     } else {
       config.headers["Content-Type"] = "application/json";
     }
@@ -31,6 +31,9 @@ axiosInstance.interceptors.request.use(
   },
   (error) => Promise.reject(error)
 );
+
+
+
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

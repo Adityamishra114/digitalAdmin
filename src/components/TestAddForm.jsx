@@ -98,10 +98,7 @@ const TestAddForm = () => {
     const payload = {
       courseId: selectedCourse,
       finalTest,
-    };
-
-    console.log('Final Test Payload:', payload);
-    // dispatch(submitFinalTest(payload));
+    }; 
   };
 
   return (
@@ -109,8 +106,6 @@ const TestAddForm = () => {
       <h2 className="text-3xl font-bold text-center text-gray-800">
         Final Test {selectedCourseTitle && `- ${selectedCourseTitle}`}
       </h2>
-
-      {/* Course & Test Title */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div>
           <label className="block font-semibold mb-1">Select Course</label>
@@ -121,7 +116,7 @@ const TestAddForm = () => {
           >
             <option value="">-- Select Course --</option>
             {courses.map((course) => (
-              <option key={course._id} value={course._id}>
+              <option key={course.id} value={course.id}>
                 {course.title}
               </option>
             ))}
@@ -139,8 +134,6 @@ const TestAddForm = () => {
           />
         </div>
       </div>
-
-      {/* Only show question input after course selected */}
       {selectedCourse && (
         <>
           <div className="space-y-4">
@@ -217,8 +210,6 @@ const TestAddForm = () => {
               </button>
             </div>
           </div>
-
-          {/* Questions Preview */}
           {questions.length > 0 && (
             <div>
               <h4 className="text-lg font-semibold text-gray-700 mt-8 mb-4">Questions Added</h4>

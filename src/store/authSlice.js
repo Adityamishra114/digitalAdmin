@@ -59,11 +59,13 @@ export const loadUser = createAsyncThunk(
 );
 export const updateUser = createAsyncThunk(
   "auth/updateUser",
-  async (userData, { rejectWithValue }) => {
+  async (formData, { rejectWithValue }) => {
     try {
-      const { email, ...allowedData } = userData;
-      const res = await axiosInstance.put("/user/update-profile", allowedData, {
+      const res = await axiosInstance.put("/user/update-profile", formData, {
         withCredentials: true,
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
 
       if (res.data.success && res.data.user) {
@@ -75,6 +77,7 @@ export const updateUser = createAsyncThunk(
     }
   }
 );
+
 export const logoutUser = createAsyncThunk(
   "auth/logoutUser",
   async (_, { rejectWithValue }) => {

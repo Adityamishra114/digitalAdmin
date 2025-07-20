@@ -53,7 +53,7 @@ export const editCourse = createAsyncThunk(
   "course/editCourse",
   async ({ courseId, formData }, { rejectWithValue }) => {
     try {
-      const res = await axiosInstance.put(`/courses/${courseId}`, formData);
+      const res = await axiosInstance.put(`/courses/edit/${courseId}`, formData,);
       return res.data.course;
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || "Failed to edit course");

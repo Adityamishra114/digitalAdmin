@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import {
   fetchAllCourseStudents,
   deleteCourseEnrollment,
@@ -12,6 +13,8 @@ const PAGE_SIZE = 10;
 
 const CourseEnrolledList = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+
   const enrolledCourses = useSelector(selectAllEnrolledCourses);
   const status = useSelector(selectCourseStudentStatus);
   const [currentPage, setCurrentPage] = useState(1);
@@ -20,15 +23,15 @@ const CourseEnrolledList = () => {
     dispatch(fetchAllCourseStudents());
   }, [dispatch]);
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (enrollmentId) => {
     if (window.confirm("Are you sure you want to delete this enrollment?")) {
-      await dispatch(deleteCourseEnrollment(id));
-      dispatch(fetchAllCourseStudents());
+      await dispatch(deleteCourseEnrollment(enrollmentId));
+      dispatch(fetchAllCourseStudents()); 
     }
   };
 
-  const handleEdit = (id) => {
-    alert(`Edit functionality for enrollment ID: ${id}`);
+  const handleEdit = (courseId) => {
+    navigate(`/admin/CourseStudent/edit/${courseId}`);
   };
 
   const paginatedData = enrolledCourses.slice(
@@ -39,18 +42,18 @@ const CourseEnrolledList = () => {
   const totalPages = Math.ceil(enrolledCourses.length / PAGE_SIZE);
 
   return (
-    <div className="p-4">
-      <h2 className="text-xl font-semibold mb-4">Enrolled Courses List</h2>
+    <div className="p-4 max-w-6xl mx-auto">
+      <h2 className="text-xl font-semibold mb-4 text-center">Enrolled Courses</h2>
 
       {status === "loading" ? (
-        <p>Loading...</p>
+        <p className="text-center">Loading...</p>
       ) : enrolledCourses.length === 0 ? (
-        <p>No enrolled courses found.</p>
+        <p className="text-center">No enrollments found.</p>
       ) : (
         <>
-          <div className="overflow-x-auto w-full">
-            <table className="min-w-full bg-white border border-gray-200 rounded-md">
-              <thead className="bg-gray-100 text-sm font-medium text-gray-700">
+          <div className="overflow-x-auto rounded-md border border-gray-200">
+            <table className="min-w-full bg-white text-sm">
+              <thead className="bg-gray-100 text-left">
                 <tr>
                   <th className="px-4 py-2 border">#</th>
                   <th className="px-4 py-2 border">Image</th>
@@ -60,39 +63,37 @@ const CourseEnrolledList = () => {
                   <th className="px-4 py-2 border text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody className="text-sm">
+              <tbody>
                 {paginatedData.map((enrollment, index) => {
-                  const course = enrollment?.course;
-                  if (!course) return null;
-
+                  const courseId = enrollment?.courseId;
                   return (
-                    <tr key={enrollment._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 border">
+                    <tr key={courseId} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 border text-center">
                         {(currentPage - 1) * PAGE_SIZE + index + 1}
                       </td>
-                      <td className="px-4 py-2 border">
+                      <td className="px-4 py-2 border text-center">
                         <img
-                          src={course.image || "/default-course.jpg"}
-                          alt={course.title || "Untitled"}
-                          className="w-14 h-14 object-cover rounded"
+                          src={enrollment?.image || "/default-course.jpg"}
+                          alt={enrollment?.title || "Untitled"}
+                          className="w-14 h-14 object-cover rounded mx-auto"
                         />
                       </td>
-                      <td className="px-4 py-2 border">{course.title || "Untitled"}</td>
+                      <td className="px-4 py-2 border">{enrollment?.title || "Untitled"}</td>
                       <td className="px-4 py-2 border">
-                        {course.totalHours ? `${course.totalHours} hrs` : "N/A"}
+                        {enrollment?.totalHours ? `${enrollment.totalHours} hrs` : "N/A"}
                       </td>
-                      <td className="px-4 py-2 border">{course.level || "N/A"}</td>
+                      <td className="px-4 py-2 border">{enrollment?.level || "N/A"}</td>
                       <td className="px-4 py-2 border text-center">
                         <div className="flex items-center justify-center gap-3">
                           <button
-                            onClick={() => handleEdit(enrollment._id)}
+                            onClick={() => handleEdit(courseId)}
                             title="Edit"
                             className="hover:scale-105 transition-transform"
                           >
                             <Pencil className="w-5 h-5 text-blue-600" />
                           </button>
                           <button
-                            onClick={() => handleDelete(enrollment._id)}
+                            onClick={() => handleDelete(courseId)}
                             title="Delete"
                             className="hover:scale-105 transition-transform"
                           >
@@ -106,25 +107,24 @@ const CourseEnrolledList = () => {
               </tbody>
             </table>
           </div>
+
           {totalPages > 1 && (
-            <div className="flex flex-wrap justify-between items-center mt-4 gap-4">
-              <span className="text-sm">
+            <div className="flex flex-wrap justify-between items-center mt-4">
+              <span className="text-sm text-gray-600">
                 Page {currentPage} of {totalPages}
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex gap-2 mt-2 md:mt-0">
                 <button
                   onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
-                  className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 text-sm disabled:opacity-50"
+                  className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50"
                 >
                   Previous
                 </button>
                 <button
-                  onClick={() =>
-                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                  }
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 text-sm disabled:opacity-50"
+                  className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50"
                 >
                   Next
                 </button>

@@ -35,7 +35,6 @@ const CourseList = () => {
 
   const handleDelete = async (courseId) => {
     if (!window.confirm("Are you sure you want to delete this course?")) return;
-
     await dispatch(deleteCourse(courseId));
     const remainingCount = totalCourses - 1;
     const lastPage = Math.max(1, Math.ceil(remainingCount / perPage));

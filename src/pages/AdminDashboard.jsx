@@ -21,15 +21,17 @@ const AdminDashboard = () => {
     confirm: false,
   });
 
-  const [formData, setFormData] = useState({
-    name: "",
-    phone: "",
-    address: "",
-    profileImage: "",
-    oldPassword: "",
-    newPassword: "",
-    confirmNewPassword: "",
-  });
+const [formData, setFormData] = useState({
+  name: "",
+  phone: "",
+  address: "",
+  profileImage: "",   
+  profileImageFile: null,  
+  oldPassword: "",
+  newPassword: "",
+  confirmNewPassword: "",
+});
+
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -62,59 +64,51 @@ const AdminDashboard = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setFormData((prev) => ({ ...prev, profileImage: reader.result }));
-    };
-    reader.readAsDataURL(file);
+const handleImageUpload = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  setFormData((prev) => ({
+    ...prev,
+    profileImageFile: file, 
+  }));
+
+  const reader = new FileReader();
+  reader.onloadend = () => {
+    setFormData((prev) => ({
+      ...prev,
+      profileImage: reader.result, 
+    }));
   };
+  reader.readAsDataURL(file);
+};
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    const data = {
-      name: formData.name,
-      phone: formData.phone,
-      address: formData.address,
-      profileImage: formData.profileImage,
-    };
+  const form = new FormData();
+  form.append("name", formData.name);
+  form.append("phone", formData.phone);
+  form.append("address", formData.address);
+  form.append("oldPassword", formData.oldPassword);
+  form.append("newPassword", formData.newPassword);
+  form.append("confirmNewPassword", formData.confirmNewPassword);
 
-    if (
-      formData.oldPassword ||
-      formData.newPassword ||
-      formData.confirmNewPassword
-    ) {
-      if (
-        !formData.oldPassword ||
-        !formData.newPassword ||
-        !formData.confirmNewPassword
-      ) {
-        toast.error("All password fields are required.");
-        return;
-      }
+  if (formData.profileImageFile) {
+    form.append("profileImage", formData.profileImageFile);
+  }
 
-      if (formData.newPassword !== formData.confirmNewPassword) {
-        toast.error("New password and confirm password do not match.");
-        return;
-      }
+  const result = await dispatch(updateUser(form));
 
-      data.oldPassword = formData.oldPassword;
-      data.newPassword = formData.newPassword;
-      data.confirmNewPassword = formData.confirmNewPassword;
-    }
+  if (updateUser.fulfilled.match(result)) {
+    toast.success("Profile updated successfully!");
+    setIsEditing(false);
+  } else {
+    toast.error(result.payload || "Update failed");
+  }
+};
 
-    const result = await dispatch(updateUser(data));
 
-    if (updateUser.fulfilled.match(result)) {
-      toast.success("Profile updated successfully!");
-      setIsEditing(false);
-    } else {
-      toast.error(result.payload || "Update failed");
-    }
-  };
 
   if (status === "loading" && !user) {
     return <div className="text-center py-10 text-gray-600">Loading profile...</div>;

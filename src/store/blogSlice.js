@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { axiosInstance } from "../config";
 
+// Initial state
 const initialBlogState = {
   blogs: [],
   selectedBlog: null,
@@ -9,7 +10,9 @@ const initialBlogState = {
   currentAction: null,
 };
 
-// Thunks
+// ────── Thunks ──────
+
+// GET all blogs
 export const fetchBlogs = createAsyncThunk("blog/fetchBlogs", async (_, { rejectWithValue }) => {
   try {
     const res = await axiosInstance.get("/blogs/blogsAll");
@@ -19,15 +22,7 @@ export const fetchBlogs = createAsyncThunk("blog/fetchBlogs", async (_, { reject
   }
 });
 
-export const createBlog = createAsyncThunk("blog/createBlog", async (blogData, { rejectWithValue }) => {
-  try {
-    const res = await axiosInstance.post("/blogs/create", blogData);
-    return res.data;
-  } catch (err) {
-    return rejectWithValue(err.response?.data?.message || "Failed to create blog");
-  }
-});
-
+// GET single blog by ID
 export const fetchBlogById = createAsyncThunk("blog/fetchBlogById", async (id, { rejectWithValue }) => {
   try {
     const res = await axiosInstance.get(`/blogs/${id}`);
@@ -37,7 +32,40 @@ export const fetchBlogById = createAsyncThunk("blog/fetchBlogById", async (id, {
   }
 });
 
-// ✅ Updated: includes rating in payload and request
+// POST new blog
+export const createBlog = createAsyncThunk("blog/createBlog", async (blogData, { rejectWithValue }) => {
+  try {
+    const res = await axiosInstance.post("/blogs/create", blogData);
+    return res.data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || "Failed to create blog");
+  }
+});
+
+// PUT update blog
+export const updateBlog = createAsyncThunk(
+  "blog/updateBlog",
+  async ({ id, data }, { rejectWithValue }) => {
+    try {
+      const res = await axiosInstance.put(`/blogs/${id}`, data);
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || "Failed to update blog");
+    }
+  }
+);
+
+// DELETE blog
+export const deleteBlog = createAsyncThunk("blog/deleteBlog", async (id, { rejectWithValue }) => {
+  try {
+    await axiosInstance.delete(`/blogs/${id}`);
+    return id;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || "Failed to delete blog");
+  }
+});
+
+// POST comment
 export const addComment = createAsyncThunk(
   "blog/addComment",
   async ({ blogId, name, email, text, rating }, { rejectWithValue }) => {
@@ -55,7 +83,8 @@ export const addComment = createAsyncThunk(
   }
 );
 
-// Slice
+// ────── Slice ──────
+
 const blogSlice = createSlice({
   name: "blog",
   initialState: initialBlogState,
@@ -72,6 +101,7 @@ const blogSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // GET all
       .addCase(fetchBlogs.fulfilled, (state, action) => {
         state.blogs = action.payload;
         state.status = "succeeded";
@@ -81,6 +111,19 @@ const blogSlice = createSlice({
         state.status = "failed";
         state.error = action.payload;
       })
+
+      // GET one
+.addCase(fetchBlogById.fulfilled, (state, action) => {
+  const existingIndex = state.blogs.findIndex(b => b._id === action.payload._id);
+  if (existingIndex !== -1) {
+    state.blogs[existingIndex] = action.payload;
+  } else {
+    state.blogs.push(action.payload);
+  }
+  state.selectedBlog = action.payload;
+  state.status = "succeeded";
+})
+      // CREATE
       .addCase(createBlog.fulfilled, (state, action) => {
         state.blogs.unshift(action.payload);
         state.status = "succeeded";
@@ -90,27 +133,48 @@ const blogSlice = createSlice({
         state.status = "failed";
         state.error = action.payload;
       })
-      .addCase(fetchBlogById.fulfilled, (state, action) => {
-        state.selectedBlog = action.payload;
+
+      // UPDATE
+      .addCase(updateBlog.fulfilled, (state, action) => {
+        const index = state.blogs.findIndex((b) => b._id === action.payload._id);
+        if (index !== -1) {
+          state.blogs[index] = action.payload;
+        }
+        if (state.selectedBlog?._id === action.payload._id) {
+          state.selectedBlog = action.payload;
+        }
         state.status = "succeeded";
         state.error = null;
       })
-      .addCase(fetchBlogById.rejected, (state, action) => {
+      .addCase(updateBlog.rejected, (state, action) => {
         state.status = "failed";
         state.error = action.payload;
       })
+
+      // DELETE
+      .addCase(deleteBlog.fulfilled, (state, action) => {
+        state.blogs = state.blogs.filter((b) => b._id !== action.payload);
+        if (state.selectedBlog?._id === action.payload) {
+          state.selectedBlog = null;
+        }
+        state.status = "succeeded";
+        state.error = null;
+      })
+      .addCase(deleteBlog.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload;
+      })
+
+      // COMMENT
       .addCase(addComment.fulfilled, (state, action) => {
         const { blogId, comments } = action.payload;
-
-        if (state.selectedBlog?._id === blogId) {
-          state.selectedBlog.comments = comments;
-        }
-
         const index = state.blogs.findIndex((b) => b._id === blogId);
         if (index !== -1) {
           state.blogs[index].comments = comments;
         }
-
+        if (state.selectedBlog?._id === blogId) {
+          state.selectedBlog.comments = comments;
+        }
         state.status = "succeeded";
         state.error = null;
       })
@@ -118,6 +182,8 @@ const blogSlice = createSlice({
         state.status = "failed";
         state.error = action.payload;
       })
+
+      // PENDING
       .addMatcher(
         (action) => action.type.endsWith("/pending"),
         (state, action) => {
@@ -126,9 +192,10 @@ const blogSlice = createSlice({
           state.currentAction = action.type.split("/")[1];
         }
       )
+
+      // Reset currentAction
       .addMatcher(
-        (action) =>
-          action.type.endsWith("/fulfilled") || action.type.endsWith("/rejected"),
+        (action) => action.type.endsWith("/fulfilled") || action.type.endsWith("/rejected"),
         (state) => {
           state.currentAction = null;
         }
@@ -136,10 +203,8 @@ const blogSlice = createSlice({
   },
 });
 
-export const {
-  clearBlogError,
-  clearSelectedBlog,
-  setBlogStatusIdle,
-} = blogSlice.actions;
+// Export actions
+export const { clearBlogError, clearSelectedBlog, setBlogStatusIdle } = blogSlice.actions;
 
+// Export reducer
 export default blogSlice.reducer;

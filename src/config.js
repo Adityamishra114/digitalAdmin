@@ -15,9 +15,6 @@ export const FRONTEND_URL = isProduction
 export const axiosInstance = axios.create({
   baseURL: BACKEND_URL,
   withCredentials: true,
-  headers: {
-    "Content-Type": "application/json",
-  },
 });
 
 export const axiosAuthInstance = (token) =>

@@ -2,9 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { getInitials, logout } from "../store/authSlice";
-import Logo from "../assets/logo.png";
 import { HiOutlineMenu, HiX } from "react-icons/hi";
-
+import Logo from "/assets/logo.png"
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [profileDropdown, setProfileDropdown] = useState(false);

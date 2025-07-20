@@ -21,7 +21,7 @@ const TestList = () => {
   const successMessage = useSelector(selectCourseStudentSuccess);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const itemsPerPage = 10;
 
   useEffect(() => {
     dispatch(fetchAllCourseStudents());
@@ -34,10 +34,9 @@ const TestList = () => {
 
   const totalPages = Math.ceil(courses.length / itemsPerPage);
 
-  const handleEdit = (item) => {
-    navigate(`/tests/edit/${item._id}`);
-  };
-
+const handleEdit = (item) => {
+  navigate(`/admin/tests/edit/${item._id}`);
+};
   const handleDelete = (id) => {
     if (window.confirm("Are you sure you want to delete this enrollment?")) {
       dispatch(deleteCourseEnrollment(id)).then(() => {
@@ -87,13 +86,13 @@ const TestList = () => {
                   </td>
                   <td className="p-3 border">
                     <img
-                      src={item.courseId?.image || "/placeholder.jpg"}
-                      alt={item.courseId?.title || "Course Image"}
+                      src={item?.image || "/placeholder.jpg"}
+                      alt={item?.title || "Course Image"}
                       className="w-12 h-12 object-cover rounded"
                     />
                   </td>
                   <td className="p-3 border">
-                    {item.courseId?.title || "N/A"}
+                    {item?.title || "N/A"}
                   </td>
                   <td className="p-3 border">
                     {item.finalTest?.questions?.length ?? 0}
