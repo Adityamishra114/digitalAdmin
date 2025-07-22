@@ -8,7 +8,6 @@ import {
   selectCourseStatus,
   selectSelectedCourse,
 } from "../store/courseSlice";
-
 const CourseEditForm = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -47,79 +46,77 @@ const CourseEditForm = () => {
         topics: (course.topics || []).join(", "),
         includes: (course.includes || []).join(", "),
         requirements: (course.requirements || []).join(", "),
+        type: course.type || "", // ensure `type` is set
       });
 
-      // Load previews from DB URLs
       setImagePreview(course.image || null);
       setVideoPreview(course.previewVideo || null);
       setBrochurePreview(course.downloadBrochure || null);
     }
   }, [course, reset]);
 
-const customSplit = (input) => {
-  const result = [];
-  let current = '';
-  let depth = 0;
+  const customSplit = (input) => {
+    const result = [];
+    let current = '';
+    let depth = 0;
 
-  for (const char of input) {
-    if (char === ',' && depth === 0) {
-      result.push(current.trim());
-      current = '';
-    } else {
-      if (char === '(') depth++;
-      if (char === ')') depth--;
-      current += char;
-    }
-  }
-
-  if (current) result.push(current.trim());
-  return result.filter(Boolean);
-};
-const preparePayload = (data, imageFile, videoFile, brochureFile, course = {}) => {
-  const fieldsToSplit = ["whatYouWillLearn", "topics", "includes", "requirements"];
-  const payload = { ...data };
-  fieldsToSplit.forEach((field) => {
-    const value = data[field];
-    if (typeof value === "string") {
-      try {
-        const parsed = JSON.parse(value);
-        payload[field] = Array.isArray(parsed) ? parsed : customSplit(value);
-      } catch {
-        payload[field] = customSplit(value);
+    for (const char of input) {
+      if (char === ',' && depth === 0) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        if (char === '(') depth++;
+        if (char === ')') depth--;
+        current += char;
       }
     }
-  });
 
-  const formData = new FormData();
-  Object.entries(payload).forEach(([key, value]) => {
-    const finalValue = Array.isArray(value) ? JSON.stringify(value) : value;
-    formData.append(key, finalValue);
-  });
-  if (imageFile) {
-    formData.append("image", imageFile);
-    if (course.image) {
-      formData.append("oldImageUrl", course.image);
-    }
-  }
-  if (videoFile) {
-    formData.append("previewVideo", videoFile);
-    if (course.previewVideo) {
-      formData.append("oldVideoUrl", course.previewVideo);
-    }
-  }
-  if (brochureFile) {
-    formData.append("downloadBrochure", brochureFile);
-    if (course.downloadBrochure) {
-      formData.append("oldBrochureUrl", course.downloadBrochure);
-    }
-  }
+    if (current) result.push(current.trim());
+    return result.filter(Boolean);
+  };
 
-  return formData;
-};
+  const preparePayload = (data, imageFile, videoFile, brochureFile, course = {}) => {
+    const fieldsToSplit = ["whatYouWillLearn", "topics", "includes", "requirements"];
+    const payload = { ...data };
+    fieldsToSplit.forEach((field) => {
+      const value = data[field];
+      if (typeof value === "string") {
+        try {
+          const parsed = JSON.parse(value);
+          payload[field] = Array.isArray(parsed) ? parsed : customSplit(value);
+        } catch {
+          payload[field] = customSplit(value);
+        }
+      }
+    });
+
+    const formData = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      const finalValue = Array.isArray(value) ? JSON.stringify(value) : value;
+      formData.append(key, finalValue);
+    });
+
+    if (imageFile) {
+      formData.append("image", imageFile);
+      if (course.image) formData.append("oldImageUrl", course.image);
+    }
+
+    if (videoFile) {
+      formData.append("previewVideo", videoFile);
+      if (course.previewVideo) formData.append("oldVideoUrl", course.previewVideo);
+    }
+
+    if (brochureFile) {
+      formData.append("downloadBrochure", brochureFile);
+      if (course.downloadBrochure) formData.append("oldBrochureUrl", course.downloadBrochure);
+    }
+
+    return formData;
+  };
 
   const onSubmit = async (data) => {
     try {
-      const formData = preparePayload(data);
+      const formData = preparePayload(data, imageFile, videoFile, brochureFile, course);
       await dispatch(editCourse({ courseId, formData })).unwrap();
       navigate("/admin/courses/list");
     } catch (err) {
@@ -131,19 +128,22 @@ const preparePayload = (data, imageFile, videoFile, brochureFile, course = {}) =
 
   return (
     <div className="max-w-5xl mx-auto p-6 sm:p-10 bg-white shadow-xl rounded-2xl border border-gray-200">
-      <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-6">✏️ Edit Course ({course.title})</h2>
+      <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-6">
+        ✏️ Edit Course ({course.title})
+      </h2>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} encType="multipart/form-data" className="space-y-6">
         {type && (
           <>
+            {/* Basic Inputs */}
             <div>
               <label className="block font-semibold text-gray-700 mb-1">Title</label>
               <input
                 {...register("title", { required: true })}
                 className="w-full border border-gray-300 px-3 py-2 rounded-md"
-                placeholder="Course Title"
               />
             </div>
+
             <div>
               <label className="block font-semibold text-gray-700 mb-1">Subtitle</label>
               <input
@@ -151,6 +151,7 @@ const preparePayload = (data, imageFile, videoFile, brochureFile, course = {}) =
                 className="w-full border border-gray-300 px-3 py-2 rounded-md"
               />
             </div>
+
             <div>
               <label className="block font-semibold text-gray-700 mb-1">Course Image</label>
               <input
@@ -166,11 +167,12 @@ const preparePayload = (data, imageFile, videoFile, brochureFile, course = {}) =
               {imagePreview && (
                 <img
                   src={imagePreview}
-                  alt="Course preview"
+                  alt="Preview"
                   className="mt-2 w-64 h-auto rounded-md border"
                 />
               )}
             </div>
+
             <div>
               <label className="block font-semibold text-gray-700 mb-1">Category</label>
               <input
@@ -178,6 +180,7 @@ const preparePayload = (data, imageFile, videoFile, brochureFile, course = {}) =
                 className="w-full border border-gray-300 px-3 py-2 rounded-md"
               />
             </div>
+
             {type === "Student" && (
               <>
                 <div>
@@ -193,18 +196,12 @@ const preparePayload = (data, imageFile, videoFile, brochureFile, course = {}) =
                     className="w-full border border-gray-300 px-3 py-2 rounded-md"
                   />
                   {videoPreview && (
-                    <video
-                      src={videoPreview}
-                      controls
-                      className="mt-2 w-full rounded-md border"
-                    />
+                    <video src={videoPreview} controls className="mt-2 w-full rounded-md border" />
                   )}
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-gray-700 mb-1">
-                    What You Will Learn
-                  </label>
+                  <label className="block font-semibold text-gray-700 mb-1">What You Will Learn</label>
                   <input
                     {...register("whatYouWillLearn")}
                     placeholder="Comma-separated list"
@@ -248,6 +245,7 @@ const preparePayload = (data, imageFile, videoFile, brochureFile, course = {}) =
                 </div>
               </>
             )}
+
             {type === "Business" && (
               <div>
                 <label className="block font-semibold text-gray-700 mb-1">Brochure (PDF)</label>
@@ -264,10 +262,13 @@ const preparePayload = (data, imageFile, videoFile, brochureFile, course = {}) =
                 {brochurePreview && (
                   <div className="mt-2">
                     <p className="text-sm font-medium">
-                      📄 {brochurePreview.name || brochurePreview.split("/").pop()}
+                      📄{" "}
+                      {typeof brochurePreview === "string"
+                        ? brochurePreview.split("/").pop()
+                        : brochurePreview.name}
                     </p>
                     <a
-                      href={brochurePreview.url || brochurePreview}
+                      href={typeof brochurePreview === "string" ? brochurePreview : brochurePreview.url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 underline text-sm"
@@ -278,6 +279,7 @@ const preparePayload = (data, imageFile, videoFile, brochureFile, course = {}) =
                 )}
               </div>
             )}
+
             <div>
               <label className="block font-semibold text-gray-700 mb-1">Includes</label>
               <input
@@ -285,6 +287,7 @@ const preparePayload = (data, imageFile, videoFile, brochureFile, course = {}) =
                 className="w-full border border-gray-300 px-3 py-2 rounded-md"
               />
             </div>
+
             <div>
               <label className="block font-semibold text-gray-700 mb-1">Description</label>
               <textarea
@@ -293,6 +296,7 @@ const preparePayload = (data, imageFile, videoFile, brochureFile, course = {}) =
                 className="w-full border border-gray-300 px-3 py-2 rounded-md"
               />
             </div>
+
             <div className="pt-4">
               <button
                 type="submit"
@@ -312,3 +316,4 @@ const preparePayload = (data, imageFile, videoFile, brochureFile, course = {}) =
 };
 
 export default CourseEditForm;
+

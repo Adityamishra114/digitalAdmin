@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   fetchAllCourseStudents,
-  selectAllEnrolledCourses,
+  selectStudentCourseList,
   selectCourseStudentStatus,
   createCourseEnrollment,
   fetchPurchasedEnrolledCourses,
@@ -10,15 +10,17 @@ import {
 } from "../store/courseStudentSlice";
 import FileUploadPreview from "./FileUploadPreview";
 import QuizEditor from "./QuizEditor";
-import {calculateDurationsAndCounts} from "../utils/enrolledCal"
+import { calculateDurationsAndCounts } from "../utils/enrolledCal";
+import { useNavigate } from "react-router-dom";
+
 const contentTypes = ["video", "pdf", "image", "audio", "test"];
 
 const CourseEnrolledAdd = () => {
   const dispatch = useDispatch();
   const finalTestQuestions = useSelector(selectTotalFinalQuestions);
-  const enrolledCourses = useSelector(selectAllEnrolledCourses);
+  const enrolledCourses = useSelector(selectStudentCourseList);
   const status = useSelector(selectCourseStudentStatus);
-
+const navigate = useNavigate()
   const [selectedCourseId, setSelectedCourseId] = useState("");
   const [formData, setFormData] = useState({
     badge: "",
@@ -36,51 +38,38 @@ const CourseEnrolledAdd = () => {
   const [openTopics, setOpenTopics] = useState({});
 
   useEffect(() => {
-    if (status === "idle") {
-      dispatch(fetchAllCourseStudents());
-    }
+    if (status === "idle") dispatch(fetchAllCourseStudents());
   }, [dispatch, status]);
 
+  const updateAndSetModules = (updatedModules) => {
+    const {
+      totalHours,
+      watchedHours,
+      assessments,
+      assignments,
+    } = calculateDurationsAndCounts(updatedModules);
 
-const updateAndSetModules = (updatedModules) => {
-  const {
-    totalHours,
-    watchedHours,
-    assessments,
-    assignments,
-  } = calculateDurationsAndCounts(updatedModules);
-
-  const totalQuestions = updatedModules.reduce((acc, mod) => {
-    const topicQuestions = mod.topics.reduce((a, t) => {
-      const contentQuestions = t.contents.reduce((c, cont) => {
-        const count = Array.isArray(cont.questions) ? cont.questions.length : 0;
-        return c + count;
+    const totalQuestions = updatedModules.reduce((acc, mod) => {
+      const topicQuestions = mod.topics.reduce((a, t) => {
+        return a + t.contents.reduce((c, cont) => c + (cont.questions?.length || 0), 0);
       }, 0);
-      return a + contentQuestions;
+      const finalTestQuestions = mod.finalTest?.questions?.length || 0;
+      return acc + topicQuestions + finalTestQuestions;
     }, 0);
 
-    const finalTestQuestions = Array.isArray(mod.finalTest?.questions)
-      ? mod.finalTest.questions.length
-      : 0;
-
-    return acc + topicQuestions + finalTestQuestions;
-  }, 0);
-
-  setFormData((prev) => ({
-    ...prev,
-    modules: updatedModules,
-    totalHours,
-    watchedHours,
-    assessments,
-    assignments,
-    questions: totalQuestions,
-  }));
-};
-
-
-  const handleInputChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      modules: updatedModules,
+      totalHours,
+      watchedHours,
+      assessments,
+      assignments,
+      questions: totalQuestions,
+    }));
   };
+  // const handleInputChange = (field, value) => {
+  //   setFormData((prev) => ({ ...prev, [field]: value }));
+  // };
 
   const toggleModule = (index) => {
     setOpenModules((prev) =>
@@ -130,54 +119,113 @@ const updateAndSetModules = (updatedModules) => {
     updateAndSetModules(updated);
   };
 
-  const handleAddContent = (moduleIndex, topicIndex) => {
-    const updated = [...formData.modules];
-    updated[moduleIndex].topics[topicIndex].contents.push({
-      type: "video",
-      name: "",
-      duration: "",
-      pages: "",
-      url: "",
-      completed: false,
-      questions: [],
-    });
-    updateAndSetModules(updated);
-  };
+const handleAddContent = (moduleIndex, topicIndex) => {
+  const updated = [...formData.modules];
+  updated[moduleIndex].topics[topicIndex].contents.push({
+  type: "video",
+  name: "",
+  duration: 0,
+  durationFormatted: "",
+  pages: "",
+  url: "",
+  completed: false,
+  questions: [],
+  file: null,
+});
+  updateAndSetModules(updated);
+};
 
 const handleCreateEnrollment = async () => {
   try {
-    const finalTest = {
-      title: "Final Assessment",
-      questions: finalTestQuestions || [],
-    };
+    const form = new FormData();
+    form.append("courseId", selectedCourseId);
+    form.append("badge", formData.badge);
+    form.append("level", formData.level);
+    form.append(
+      "tags",
+      JSON.stringify(formData.tags.split(",").map((tag) => tag.trim()))
+    );
 
-    const payload = {
-      courseId: selectedCourseId,
-      badge: formData.badge,
-      level: formData.level,
-      tags: formData.tags.split(",").map((tag) => tag.trim()),
-      totalHours: formData.totalHours,
-      watchedHours: formData.watchedHours,
-      modules: formData.modules,
-      finalTest, 
-      questions: finalTestQuestions,
-    };
+    const clonedModules = structuredClone(formData.modules);
+let totalDuration = 0;
+let assessments = 0;
+let assignments = 0;
+let totalQuestions = 0;
 
-    const result = await dispatch(createCourseEnrollment(payload));
+clonedModules.forEach((mod, mIndex) => {
+  mod.topics.forEach((topic, tIndex) => {
+    const topicContents = topic.contents || [];
+    assessments += topicContents.length;
+
+    topicContents.forEach((content, cIndex) => {
+      const fieldPrefix = `content-${content.type}-${mIndex}-${tIndex}-${cIndex}`;
+      if (content.duration) {
+        totalDuration += Number(content.duration);
+      }
+      if (Array.isArray(content.questions) && content.questions.length > 0) {
+        assignments++;
+        totalQuestions += content.questions.length;
+      }
+      if (content.file instanceof File) {
+        form.append(fieldPrefix, content.file);
+        form.append(`${fieldPrefix}-name`, content.name || content.file.name);
+        form.append(`${fieldPrefix}-duration`, content.duration || "");
+        form.append(`${fieldPrefix}-pages`, content.pages || "");
+
+        content.url = "";
+        delete content.file;
+      }
+    });
+  });
+});
+
+
+    form.append("totalHours", totalDuration);
+    form.append("watchedHours", 0);
+    form.append("assessments", assessments);
+    form.append("assignments", assignments);
+    form.append("questions", totalQuestions);
+    form.append("modules", JSON.stringify(clonedModules));
+
+    form.append(
+      "finalTest",
+      JSON.stringify({
+        name: "Final Assessment",
+        type: "test",
+        completed: false,
+        score: 0,
+        questions: finalTestQuestions || [],
+      })
+    );
+
+    const result = await dispatch(createCourseEnrollment(form));
 
     if (createCourseEnrollment.fulfilled.match(result)) {
-      alert("Enrollment created successfully!");
-      await dispatch(fetchPurchasedEnrolledCourses());
+      alert("✅ Enrollment created successfully!");
+      dispatch(fetchPurchasedEnrolledCourses());
+      setSelectedCourseId("");
+      setFormData({
+        badge: "",
+        level: "",
+        tags: "",
+        modules: [],
+        totalHours: 0,
+        watchedHours: 0,
+        assessments: 0,
+        assignments: 0,
+        questions: 0,
+      });
+      setOpenModules([]);
+      setOpenTopics({});
+      navigate("/admin/CourseStudent/list");
     } else {
-      alert(result.payload || "Failed to create enrollment.");
+      alert(result.payload || "❌ Failed to create enrollment.");
     }
   } catch (error) {
     console.error("Create enrollment error:", error);
-    alert("Unexpected error occurred.");
+    alert("❌ Unexpected error occurred.");
   }
 };
-
-
 
 
   return (
@@ -198,63 +246,32 @@ const handleCreateEnrollment = async () => {
       </select>
 
       {selectedCourseId && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <input
-              type="text"
-              placeholder="Badge"
-              className="border p-2 rounded"
-              value={formData.badge}
-              onChange={(e) => handleInputChange("badge", e.target.value)}
-            />
-            <input
-              type="text"
-              placeholder="Level"
-              className="border p-2 rounded"
-              value={formData.level}
-              onChange={(e) => handleInputChange("level", e.target.value)}
-            />
-            <input
-              type="text"
-              placeholder="Tags (comma-separated)"
-              className="border p-2 rounded col-span-full"
-              value={formData.tags}
-              onChange={(e) => handleInputChange("tags", e.target.value)}
-            />
-            <input
-              type="text"
-              readOnly
-              className="border p-2 rounded bg-gray-100"
-              value={`Total Hours: ${formData.totalHours}`}
-            />
-            <input
-              type="text"
-              readOnly
-              className="border p-2 rounded bg-gray-100"
-              value={`Watched Hours: ${formData.watchedHours}`}
-            />
-            <input
-              type="text"
-              readOnly
-              className="border p-2 rounded bg-gray-100"
-              value={`Assessments: ${formData.assessments}`}
-            />
-            <input
-              type="text"
-              readOnly
-              className="border p-2 rounded bg-gray-100"
-              value={`Assignments: ${formData.assignments}`}
-            />
-            <input
-              type="text"
-              readOnly
-              className="border p-2 rounded bg-gray-100"
-              value={`Questions: ${formData.questions}`}
-            />
-          </div>
-          <button
+        <div>
+          <input
+            type="text"
+            placeholder="Badge"
+            className="border p-2 rounded mb-2"
+            value={formData.badge}
+            onChange={(e) => setFormData({ ...formData, badge: e.target.value })}
+          />
+          <input
+            type="text"
+            placeholder="Level"
+            className="border p-2 rounded mb-2"
+            value={formData.level}
+            onChange={(e) => setFormData({ ...formData, level: e.target.value })}
+          />
+          <input
+            type="text"
+            placeholder="Tags (comma-separated)"
+            className="border p-2 rounded mb-4 mr-1"
+            value={formData.tags}
+            onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+          />
+
+           <button
             onClick={handleAddModule}
-            className="text-primary underline mb-4"
+            className="text-primary underline mb-4 mr-2"
           >
             ➕ Add Module
           </button>
@@ -420,13 +437,17 @@ const handleCreateEnrollment = async () => {
             </div>
           ))}
 
-          <button
+
+  <button
             onClick={handleCreateEnrollment}
-            className="mt-6 ml-4 bg-primary hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded"
+            className="mt-6  bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded"
           >
             ✅ Create Enrollment
           </button>
-        </>
+
+        
+        </div>
+        
       )}
     </div>
   );

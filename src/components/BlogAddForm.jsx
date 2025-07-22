@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { createBlog, setBlogStatusIdle } from "../store/blogSlice";
 import { tagMap } from "../utils/tagMap";
-import { useNavigate } from "react-router-dom"; // <-- Add this
+import { useNavigate } from "react-router-dom"; 
 
 const getInitials = (name = "") => {
   const parts = name.trim().split(" ");
@@ -11,7 +11,7 @@ const getInitials = (name = "") => {
 
 const BlogAddForm = () => {
   const dispatch = useDispatch();
-  const navigate = useNavigate(); // <-- Add this
+  const navigate = useNavigate(); 
   const { status, error } = useSelector((state) => state.blog);
 
   const [formData, setFormData] = useState({

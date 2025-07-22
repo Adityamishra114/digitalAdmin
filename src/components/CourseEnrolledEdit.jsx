@@ -12,7 +12,7 @@ import QuizEditor from "./QuizEditor";
 const CourseEnrolledEdit = () => {
   const { courseId } = useParams();
   const dispatch = useDispatch();
-  const enrolledCourses = useSelector(selectPurchasedCourses);
+  const enrolledCourses = useSelector(updateCourseEnrollment);
   const [formData, setFormData] = useState(null);
   const [openModules, setOpenModules] = useState([]);
   const [openTopics, setOpenTopics] = useState({});
@@ -27,7 +27,7 @@ const CourseEnrolledEdit = () => {
 useEffect(() => {
   if (!courseId || !enrolledCourses?.length) return;
 
-  const selected = enrolledCourses.find((c) => c.courseId === courseId);
+  const selected = enrolledCourses.find(course => course.id === id);
   console.log(selected)
   if (selected) {
     setFormData({

@@ -35,7 +35,7 @@ const TestList = () => {
   const totalPages = Math.ceil(courses.length / itemsPerPage);
 
 const handleEdit = (item) => {
-  navigate(`/admin/tests/edit/${item._id}`);
+  navigate(`/admin/tests/edit/${item.id}`);
 };
   const handleDelete = (id) => {
     if (window.confirm("Are you sure you want to delete this enrollment?")) {
@@ -78,7 +78,7 @@ const handleEdit = (item) => {
             {paginatedCourses.length > 0 ? (
               paginatedCourses.map((item, index) => (
                 <tr
-                  key={item._id}
+                  key={item.id}
                   className="hover:bg-gray-50 transition duration-150"
                 >
                   <td className="p-3 border">
@@ -108,7 +108,7 @@ const handleEdit = (item) => {
                       </button>
                       <button
                         title="Delete"
-                        onClick={() => handleDelete(item._id)}
+                        onClick={() => handleDelete(item.id)}
                         className="text-red-600 hover:text-red-800 transition"
                       >
                         <Trash2 size={18} />

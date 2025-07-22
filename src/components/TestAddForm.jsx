@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchAllCourseStudents } from '../store/courseStudentSlice';
+import { addFinalTestToCourse, fetchAllCourseStudents,selectStudentCourseList } from '../store/courseStudentSlice';
+import { useNavigate } from 'react-router-dom';
 
 const TestAddForm = () => {
   const dispatch = useDispatch();
-  const courses = useSelector((state) => state.courseStudent.enrolledCourses || []);
-
+  const courses = useSelector(selectStudentCourseList);
+  
   const [selectedCourse, setSelectedCourse] = useState('');
   const [testName, setTestName] = useState('Final Course Test');
   const [questions, setQuestions] = useState([]);
+  const navigate = useNavigate();
 
   const [newQuestion, setNewQuestion] = useState({
     question: '',
@@ -55,51 +57,90 @@ const TestAddForm = () => {
     }));
   };
 
-  const handleAddQuestion = () => {
-    const { question, options, answerIndex, type } = newQuestion;
-    const cleanedOptions = options.filter((opt) => opt.trim());
+const handleAddQuestion = () => {
+  if (!newQuestion.question.trim() || newQuestion.options.some((opt) => !opt.trim())) {
+    alert("All fields must be filled");
+    return;
+  }
 
-    if (!question.trim() || cleanedOptions.length < 2 || answerIndex.length === 0) {
-      alert('Please fill in all question details correctly.');
-      return;
-    }
+  const correctAnswers =
+    newQuestion.type === "multi"
+      ? newQuestion.answerIndex
+      : [newQuestion.answerIndex[0]];
 
-    const answers = answerIndex.map((i) => cleanedOptions[i]);
-
-    setQuestions((prev) => [
-      ...prev,
-      {
-        question: question.trim(),
-        options: cleanedOptions,
-        answer: type === 'single' ? answers[0] : answers,
-        selectedAnswer: '',
-        isCorrect: false,
-        type,
-      },
-    ]);
-
-    setNewQuestion({ question: '', options: ['', '', ''], answerIndex: [], type });
+  const questionToAdd = {
+    question: newQuestion.question,
+    options: newQuestion.options,
+    answer: correctAnswers.map((i) => newQuestion.options[i]),
+    type: newQuestion.type,
   };
 
-  const handleSubmit = () => {
-    if (!selectedCourse || questions.length === 0) {
-      alert('Please select a course and add at least one question.');
-      return;
-    }
+  setQuestions([...questions, questionToAdd]);
 
-    const finalTest = {
-      name: testName.trim(),
-      type: 'test',
-      completed: false,
-      score: 0,
-      questions,
-    };
+  // Reset
+  setNewQuestion({
+    question: "",
+    options: ["", ""],
+    answerIndex: [],
+    type: "single",
+  });
+};
 
-    const payload = {
-      courseId: selectedCourse,
-      finalTest,
-    }; 
+
+
+const handleSubmit = async () => {
+  if (!selectedCourse || questions.length === 0) {
+    alert("Please select a course and add at least one question.");
+    return;
+  }
+
+  const selectedCourseData = courses.find(
+    (c) => c.courseId === selectedCourse || c._id === selectedCourse
+  );
+
+  if (!selectedCourseData) {
+    alert("Invalid course selected.");
+    return;
+  }
+
+  const finalTest = {
+    name: testName.trim() || "Final Test",
+    type: "test",
+    completed: false,
+    score: 0,
+    questions: questions.map((q) => ({
+      question: q.question,
+      options: q.options,
+      answer: q.answer,
+      selectedAnswer: "",
+      multiSelect: q.type === "multi",
+      isCorrect: false,
+    })),
   };
+
+  try {
+    const result = await dispatch(
+      addFinalTestToCourse({
+        courseId: selectedCourseData.courseId || selectedCourseData._id,
+        finalTest,
+      })
+    );
+
+    if (addFinalTestToCourse.fulfilled.match(result)) {
+      alert("✅ Final test questions added!");
+      setQuestions([]);
+      setTestName("");
+      setSelectedCourse("");
+      navigate("/admin/test/list");
+    } else {
+      alert(result.payload || "❌ Failed to add test questions.");
+    }
+  } catch (err) {
+    console.error("❌ Submission error:", err);
+    alert("❌ Unexpected error occurred.");
+  }
+};
+
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 bg-white shadow-lg rounded-lg space-y-8">
@@ -115,11 +156,11 @@ const TestAddForm = () => {
             onChange={(e) => setSelectedCourse(e.target.value)}
           >
             <option value="">-- Select Course --</option>
-            {courses.map((course) => (
-              <option key={course.id} value={course.id}>
-                {course.title}
-              </option>
-            ))}
+           {Array.isArray(courses) && courses.map((course) => (
+  <option key={course.courseId} value={course.courseId}>
+    {course.title}
+  </option>
+))}
           </select>
         </div>
 

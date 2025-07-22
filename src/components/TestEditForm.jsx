@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchAllCourseStudents } from '../store/courseStudentSlice';
+import { useNavigate } from 'react-router-dom';
+import { addFinalTestToCourse, fetchAllCourseStudents } from '../store/courseStudentSlice';
 
-const TestEditForm = ({ onSubmit }) => {
+const TestEditForm = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const courses = useSelector((state) => state.courseStudent.enrolledCourses || []);
 
   const [selectedCourseTitle, setSelectedCourseTitle] = useState('');
@@ -21,26 +23,22 @@ const TestEditForm = ({ onSubmit }) => {
     dispatch(fetchAllCourseStudents());
   }, [dispatch]);
 
-  // Load test from selected course
   useEffect(() => {
-    if (selectedCourseTitle && courses.length > 0) {
-      const course = courses.find((c) => c.title === selectedCourseTitle);
-      if (course) {
-        const test = course.finalTest || {};
-        setTestName(test.name || 'Final Course Test');
-        setQuestions(test.questions || []);
-        setSelectedQuestionIndex(0);
-      }
+    const course = courses.find((c) => c.title === selectedCourseTitle);
+    if (course) {
+      const test = course.finalTest || {};
+      setTestName(test.name || 'Final Course Test');
+      setQuestions(test.questions || []);
+      setSelectedQuestionIndex(0);
     }
   }, [selectedCourseTitle, courses]);
 
-  // Load selected question
   useEffect(() => {
     const q = questions[selectedQuestionIndex];
-    if (q) {
+    if (q && q.options) {
       const answerIndexes = Array.isArray(q.answer)
-        ? q.answer.map((ans) => q.options.indexOf(ans))
-        : [q.options.indexOf(q.answer)];
+        ? q.answer.map((ans) => q.options.indexOf(ans)).filter((i) => i !== -1)
+        : [q.options.indexOf(q.answer)].filter((i) => i !== -1);
 
       setNewQuestion({
         question: q.question || '',
@@ -83,26 +81,31 @@ const TestEditForm = ({ onSubmit }) => {
     const updatedAnswers = newQuestion.answerIndex
       .filter((i) => i !== index)
       .map((i) => (i > index ? i - 1 : i));
-
-    setNewQuestion({
-      ...newQuestion,
-      options: updatedOptions,
-      answerIndex: updatedAnswers,
-    });
+    setNewQuestion({ ...newQuestion, options: updatedOptions, answerIndex: updatedAnswers });
   };
 
-  const handleSaveQuestion = () => {
+  const isValidQuestion = (q) => {
+    return (
+      q &&
+      q.question?.trim() &&
+      Array.isArray(q.options) &&
+      q.options.filter((opt) => opt.trim()).length >= 2 &&
+      (Array.isArray(q.answer) ? q.answer.length : q.answer?.trim?.())
+    );
+  };
+
+  const handleSaveQuestion = async (addNewAfter = false) => {
     const { question, options, answerIndex, type } = newQuestion;
-    const cleanedOptions = options.filter((opt) => opt.trim());
+    const cleanedOptions = options.map((opt) => opt.trim()).filter(Boolean);
 
     if (!question.trim() || cleanedOptions.length < 2 || answerIndex.length === 0) {
-      alert('Please fill all required fields.');
+      alert('⚠️ Please fill all required fields before saving.');
       return;
     }
 
     const answers = answerIndex.map((i) => cleanedOptions[i]);
 
-    const updated = {
+    const updatedQuestion = {
       question: question.trim(),
       options: cleanedOptions,
       answer: type === 'single' ? answers[0] : answers,
@@ -111,36 +114,87 @@ const TestEditForm = ({ onSubmit }) => {
       type,
     };
 
-    const updatedList = [...questions];
-    updatedList[selectedQuestionIndex] = updated;
-    setQuestions(updatedList);
-  };
+    const course = courses.find((c) => c.title === selectedCourseTitle);
+    const courseId = course?.courseId;
+    if (!courseId) return;
 
-  const handleAddNewQuestion = () => {
-    handleSaveQuestion();
-    const newQ = {
-      question: '',
-      options: ['', '', ''],
-      answer: '',
-      selectedAnswer: '',
-      isCorrect: false,
-      type: 'single',
+    const existingTest = course.finalTest || {
+      name: testName.trim(),
+      type: 'test',
+      completed: false,
+      score: 0,
+      questions: [],
     };
-    setQuestions([...questions, newQ]);
-    setSelectedQuestionIndex(questions.length);
+
+    const updatedQuestions = [...existingTest.questions];
+    updatedQuestions[selectedQuestionIndex] = updatedQuestion;
+
+    const filteredQuestions = updatedQuestions.filter(isValidQuestion);
+
+    const finalTest = {
+      ...existingTest,
+      name: testName.trim(),
+      questions: filteredQuestions.map((q) => ({
+        ...q,
+        multiSelect: q.type === 'multi',
+        selectedAnswer: '',
+        isCorrect: false,
+      })),
+    };
+
+    try {
+      const result = await dispatch(addFinalTestToCourse({ courseId, finalTest }));
+      if (addFinalTestToCourse.fulfilled.match(result)) {
+        await dispatch(fetchAllCourseStudents());
+        const refreshedCourse = (await courses)?.find((c) => c.title === selectedCourseTitle);
+        setQuestions(refreshedCourse?.finalTest?.questions || []);
+        if (addNewAfter) {
+          const newQ = {
+            question: '',
+            options: ['', '', ''],
+            answer: '',
+            selectedAnswer: '',
+            isCorrect: false,
+            type: 'single',
+          };
+          setNewQuestion(newQ);
+          setQuestions((prev) => [...prev, newQ]);
+          setSelectedQuestionIndex((prev) => prev + 1);
+        }
+      } else {
+        alert(result.payload || '❌ Failed to save question.');
+      }
+    } catch (err) {
+      console.error('❌ Error:', err);
+      alert('Unexpected error occurred.');
+    }
   };
 
-  const handleSubmit = () => {
-    if (!selectedCourseTitle || questions.length === 0) {
-      alert('Course and questions are required.');
+  const handleAddNewQuestion = async () => {
+    await handleSaveQuestion(true);
+  };
+
+  const handleRemoveQuestion = () => {
+    const updated = [...questions];
+    updated.splice(selectedQuestionIndex, 1);
+    setQuestions(updated);
+    setSelectedQuestionIndex(Math.max(0, selectedQuestionIndex - 1));
+  };
+
+  const handleSubmit = async () => {
+    await handleSaveQuestion(false);
+
+    const course = courses.find((c) => c.title === selectedCourseTitle);
+    const courseId = course?.courseId;
+    if (!courseId || !selectedCourseTitle || questions.length === 0) {
+      alert('⚠️ Course and at least one question are required.');
       return;
     }
 
-    handleSaveQuestion();
+    const filteredQuestions = questions.filter(isValidQuestion);
 
-    const courseObj = courses.find((c) => c.title === selectedCourseTitle);
-    if (!courseObj) {
-      alert('Invalid course selected');
+    if (filteredQuestions.length === 0) {
+      alert('❌ No valid questions to save.');
       return;
     }
 
@@ -149,15 +203,30 @@ const TestEditForm = ({ onSubmit }) => {
       type: 'test',
       completed: false,
       score: 0,
-      questions,
+      questions: filteredQuestions.map((q) => ({
+        ...q,
+        multiSelect: q.type === 'multi',
+        selectedAnswer: '',
+        isCorrect: false,
+      })),
     };
 
-    const payload = {
-      courseId: courseObj._id,
-      finalTest,
-    };
-
-    if (onSubmit) onSubmit(payload);
+    try {
+      const result = await dispatch(addFinalTestToCourse({ courseId, finalTest }));
+      if (addFinalTestToCourse.fulfilled.match(result)) {
+        alert('✅ Final test saved successfully.');
+        setQuestions([]);
+        setTestName('');
+        setSelectedCourseTitle('');
+        setSelectedQuestionIndex(0);
+        navigate('/admin/test/list');
+      } else {
+        alert(result.payload || '❌ Failed to save final test.');
+      }
+    } catch (err) {
+      console.error('❌ Submission failed:', err);
+      alert('Unexpected error occurred.');
+    }
   };
 
   return (
@@ -174,7 +243,7 @@ const TestEditForm = ({ onSubmit }) => {
           >
             <option value="">-- Select Course --</option>
             {courses.map((course) => (
-              <option key={course._id} value={course.title}>
+              <option key={course.courseId} value={course.title}>
                 {course.title}
               </option>
             ))}
@@ -194,7 +263,7 @@ const TestEditForm = ({ onSubmit }) => {
 
       {selectedCourseTitle && (
         <>
-          <div className="flex flex-wrap items-center gap-4 mt-4">
+          <div className="flex items-center gap-4 mt-6 flex-wrap">
             <label className="font-semibold">Question:</label>
             <select
               className="border p-2 rounded"
@@ -210,6 +279,11 @@ const TestEditForm = ({ onSubmit }) => {
             <button onClick={handleAddNewQuestion} className="text-blue-600 underline">
               + Add New Question
             </button>
+            {questions.length > 0 && (
+              <button onClick={handleRemoveQuestion} className="text-red-600 underline ml-2">
+                Remove This Question
+              </button>
+            )}
             <p className="text-gray-500">Total: {questions.length}</p>
           </div>
 
@@ -235,9 +309,7 @@ const TestEditForm = ({ onSubmit }) => {
               rows={3}
               placeholder="Enter question..."
               value={newQuestion.question}
-              onChange={(e) =>
-                setNewQuestion((prev) => ({ ...prev, question: e.target.value }))
-              }
+              onChange={(e) => setNewQuestion({ ...newQuestion, question: e.target.value })}
             />
 
             <div className="space-y-2">
@@ -252,7 +324,7 @@ const TestEditForm = ({ onSubmit }) => {
                   <label className="flex items-center gap-1">
                     <input
                       type={newQuestion.type === 'single' ? 'radio' : 'checkbox'}
-                      checked={newQuestion.answerIndex.includes(idx)}
+                      checked={Array.isArray(newQuestion.answerIndex) && newQuestion.answerIndex.includes(idx)}
                       onChange={() => handleAnswerChange(idx)}
                     />
                     Correct
@@ -277,7 +349,7 @@ const TestEditForm = ({ onSubmit }) => {
                 + Add Option
               </button>
               <button
-                onClick={handleSaveQuestion}
+                onClick={() => handleSaveQuestion(true)}
                 className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded"
               >
                 Save Question

@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { axiosInstance } from "../config";
 
-// ✅ Create course enrollment
 export const createCourseEnrollment = createAsyncThunk(
   "courseStudent/create",
   async (data, { rejectWithValue }) => {
@@ -14,12 +13,25 @@ export const createCourseEnrollment = createAsyncThunk(
   }
 );
 
-// ✅ Fetch all enrolled courses (admin) with pagination
+export const addFinalTestToCourse = createAsyncThunk(
+  "courseStudent/addFinalTest",
+  async (data, { rejectWithValue }) => {
+    try {
+      const res = await axiosInstance.post("/courseStudent/finalTest", data);
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || "Failed to add final test");
+    }
+  }
+);
+
 export const fetchAllCourseStudents = createAsyncThunk(
   "courseStudent/fetchAll",
-  async ({ page = 1, limit = 10 } = {}, { rejectWithValue }) => {
+  async ({ page = 1, limit = 10, courseId } = {}, { rejectWithValue }) => {
     try {
-      const res = await axiosInstance.get(`/courseStudent/all?page=${page}&limit=${limit}`);
+      const params = new URLSearchParams({ page, limit });
+      if (courseId) params.append("courseId", courseId);
+      const res = await axiosInstance.get(`/courseStudent/all?${params.toString()}`);
       return { ...res.data, page, limit };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || "Failed to fetch enrolled courses");
@@ -27,12 +39,15 @@ export const fetchAllCourseStudents = createAsyncThunk(
   }
 );
 
-// ✅ Update course enrollment
 export const updateCourseEnrollment = createAsyncThunk(
   "courseStudent/update",
-  async ({ id, enrolledCourses }, { rejectWithValue }) => {
+  async ({ courseId, enrolledCourses }, { rejectWithValue }) => {
     try {
-      const res = await axiosInstance.put(`/courseStudent/${id}`, { enrolledCourses });
+      const res = await axiosInstance.put(`/courseStudent/enrolled/${courseId}`, { enrolledCourses },  {
+          headers: {
+            "Content-Type": "multipart/form-data"
+          }
+        });
       return res.data;
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || "Failed to update enrollment");
@@ -40,7 +55,6 @@ export const updateCourseEnrollment = createAsyncThunk(
   }
 );
 
-// ✅ Delete course enrollment
 export const deleteCourseEnrollment = createAsyncThunk(
   "courseStudent/delete",
   async (id, { rejectWithValue }) => {
@@ -53,7 +67,6 @@ export const deleteCourseEnrollment = createAsyncThunk(
   }
 );
 
-// ✅ Fetch user purchased courses
 export const fetchPurchasedEnrolledCourses = createAsyncThunk(
   "courseStudent/fetchPurchased",
   async (_, { rejectWithValue }) => {
@@ -68,7 +81,7 @@ export const fetchPurchasedEnrolledCourses = createAsyncThunk(
       }, 0);
 
       return {
-        courses: data,
+        enrolledCourses: data,
         totalFinalQuestions,
       };
     } catch (err) {
@@ -77,8 +90,6 @@ export const fetchPurchasedEnrolledCourses = createAsyncThunk(
   }
 );
 
-
-// ✅ Fetch resume data
 export const fetchCourseResume = createAsyncThunk(
   "courseStudent/fetchResume",
   async (courseId, { rejectWithValue }) => {
@@ -91,7 +102,6 @@ export const fetchCourseResume = createAsyncThunk(
   }
 );
 
-// ✅ Update resume
 export const updateCourseResume = createAsyncThunk(
   "courseStudent/updateResume",
   async ({ courseId, lastWatched, watchedHours }, { rejectWithValue }) => {
@@ -107,7 +117,6 @@ export const updateCourseResume = createAsyncThunk(
   }
 );
 
-// ✅ Update watched hours
 export const updateWatchedHours = createAsyncThunk(
   "courseStudent/updateWatchedHours",
   async ({ id, courseId, watchedHours }, { rejectWithValue }) => {
@@ -128,7 +137,8 @@ const initialState = {
   enrolledCourses: [],
   purchasedCourses: [],
   resumeMap: {},
-   totalFinalQuestions: 0,
+  studentCourseList: [],
+  totalFinalQuestions: 0,
   totalEnrolledCourses: 0,
   totalEnrolledUsers: 0,
   totalUniqueCourses: 0,
@@ -145,35 +155,50 @@ const courseStudentSlice = createSlice({
   initialState,
   reducers: {
     clearEnrolledCourses: (state) => {
-      state.enrolledCourses = [];
-      state.totalEnrolledCourses = 0;
-      state.totalEnrolledUsers = 0;
-      state.totalUniqueCourses = 0;
-      state.resumeMap = {};
-      state.currentPage = 1;
-      state.totalPages = 1;
-      state.status = "idle";
-      state.error = null;
-      state.successMessage = null;
+      Object.assign(state, initialState);
     },
   },
   extraReducers: (builder) => {
     builder
-      // FETCH with pagination
+      // Final Test
+      .addCase(addFinalTestToCourse.pending, (state) => {
+        state.status = "loading";
+      })
+      .addCase(addFinalTestToCourse.fulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.successMessage = action.payload.message || "Final test added successfully";
+        state.error = null;
+
+        const updatedCourse = action.payload.updatedCourse;
+        const index = state.enrolledCourses.findIndex(
+          (c) => c.courseId === updatedCourse?.courseId
+        );
+        if (index !== -1) {
+          state.enrolledCourses[index] = updatedCourse;
+        }
+      })
+      .addCase(addFinalTestToCourse.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload;
+      })
+
+      // Other thunks...
+
       .addCase(fetchAllCourseStudents.pending, (state) => {
         state.status = "loading";
       })
       .addCase(fetchAllCourseStudents.fulfilled, (state, action) => {
         state.status = "succeeded";
         state.enrolledCourses = action.payload.enrolledCourses || [];
-        state.totalEnrolledCourses = action.payload.summary.totalEnrolledCourses || 0;
-        state.totalEnrolledUsers = action.payload.summary.totalEnrolledUsers || 0;
-        state.totalUniqueCourses = action.payload.summary.totalUniqueCourses || 0;
+        state.studentCourseList = action.payload.studentCourses || [];
+        state.totalEnrolledCourses = action.payload.summary?.totalEnrolledCourses || 0;
+        state.totalEnrolledUsers = action.payload.summary?.totalEnrolledUsers || 0;
+        state.totalUniqueCourses = action.payload.summary?.totalUniqueCourses || 0;
         state.totalFinalQuestions = action.payload.totalFinalQuestions || 0;
         state.currentPage = action.payload.page;
         state.pageSize = action.payload.limit;
         state.totalPages = Math.ceil(
-          (action.payload.summary.totalEnrolledCourses || 0) / action.payload.limit
+          (action.payload.summary?.totalEnrolledCourses || 0) / action.payload.limit
         );
         state.error = null;
       })
@@ -182,7 +207,6 @@ const courseStudentSlice = createSlice({
         state.error = action.payload;
       })
 
-      // CREATE
       .addCase(createCourseEnrollment.pending, (state) => {
         state.status = "loading";
       })
@@ -197,18 +221,17 @@ const courseStudentSlice = createSlice({
         state.error = action.payload;
       })
 
-      // UPDATE
-      .addCase(updateCourseEnrollment.fulfilled, (state) => {
-        state.status = "succeeded";
-        state.successMessage = "Enrollment updated successfully";
-        state.error = null;
-      })
+      .addCase(updateCourseEnrollment.fulfilled, (state, action) => {
+  state.status = "succeeded";
+  const updated = action.payload.data; 
+  const idx = state.purchasedCourses.findIndex(c => c.courseId === updated.courseId);
+  if (idx !== -1) state.purchasedCourses[idx] = updated;
+})
       .addCase(updateCourseEnrollment.rejected, (state, action) => {
         state.status = "failed";
         state.error = action.payload;
       })
 
-      // DELETE
       .addCase(deleteCourseEnrollment.fulfilled, (state, action) => {
         state.status = "succeeded";
         state.successMessage = "Enrollment deleted successfully";
@@ -222,12 +245,11 @@ const courseStudentSlice = createSlice({
         state.error = action.payload;
       })
 
-      // PURCHASED
       .addCase(fetchPurchasedEnrolledCourses.fulfilled, (state, action) => {
         state.purchasedCourses = action.payload.enrolledCourses || [];
+        state.totalFinalQuestions = action.payload.totalFinalQuestions || 0;
       })
 
-      // RESUME
       .addCase(fetchCourseResume.fulfilled, (state, action) => {
         state.resumeMap[action.payload.courseId] = action.payload.resume;
       })
@@ -235,7 +257,6 @@ const courseStudentSlice = createSlice({
         state.resumeMap[action.payload.courseId] = action.payload.resume;
       })
 
-      // WATCHED HOURS
       .addCase(updateWatchedHours.fulfilled, (state, action) => {
         const updatedCourse = action.payload;
         const index = state.enrolledCourses.findIndex(
@@ -248,12 +269,14 @@ const courseStudentSlice = createSlice({
   },
 });
 
+// ✅ Export actions and reducer
 export const { clearEnrolledCourses } = courseStudentSlice.actions;
 export default courseStudentSlice.reducer;
 
 // ✅ Selectors
 export const selectAllEnrolledCourses = (state) => state.courseStudent.enrolledCourses;
 export const selectPurchasedCourses = (state) => state.courseStudent.purchasedCourses;
+export const selectStudentCourseList = (state) => state.courseStudent.studentCourseList;
 export const selectResumeForCourse = (courseId) => (state) =>
   state.courseStudent.resumeMap[courseId] || null;
 export const selectCourseStudentStatus = (state) => state.courseStudent.status;
@@ -264,5 +287,4 @@ export const selectTotalEnrolledUsers = (state) => state.courseStudent.totalEnro
 export const selectTotalUniqueCourses = (state) => state.courseStudent.totalUniqueCourses;
 export const selectCurrentPage = (state) => state.courseStudent.currentPage;
 export const selectTotalPages = (state) => state.courseStudent.totalPages;
-export const selectEnrolledCourses = (state) => state.courseStudent.courses;
 export const selectTotalFinalQuestions = (state) => state.courseStudent.totalFinalQuestions;

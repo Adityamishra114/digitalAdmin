@@ -14,26 +14,29 @@ const formatDuration = (seconds) => {
 const FileUploadPreview = ({ content, onChange, onRemove }) => {
   const fileInputRef = useRef(null);
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+const handleFileUpload = (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
 
-    const fileUrl = URL.createObjectURL(file);
-    const updatedContent = { ...content, url: fileUrl };
+  const fileUrl = URL.createObjectURL(file);
+  const updatedContent = { ...content, url: fileUrl, file };
 
-    if (["video", "audio"].includes(content.type)) {
-      const media = document.createElement(content.type);
-      media.src = fileUrl;
-      media.preload = "metadata";
-      media.onloadedmetadata = () => {
-        const seconds = media.duration || 0;
-        const formatted = formatDuration(seconds);
-        onChange({ ...updatedContent, duration: formatted });
-      };
-    } else {
-      onChange(updatedContent);
-    }
-  };
+  if (["video", "audio"].includes(content.type)) {
+    const media = document.createElement(content.type);
+    media.src = fileUrl;
+    media.preload = "metadata";
+   media.onloadedmetadata = () => {
+  const seconds = media.duration || 0;
+  const minutes = Math.ceil(seconds / 60);
+  const formatted = formatDuration(seconds); 
+
+  onChange({ ...updatedContent, duration: minutes, durationFormatted: formatted });
+};
+  } else {
+    onChange(updatedContent);
+  }
+};
+
 
   const handleManualPageInput = (e) => {
     const pages = parseInt(e.target.value, 10);
@@ -96,11 +99,11 @@ const FileUploadPreview = ({ content, onChange, onRemove }) => {
             </>
           )}
 
-          {["video", "audio"].includes(content.type) && content.duration && (
-            <p className="text-sm text-gray-600 mt-1">
-              Duration: <strong>{content.duration}</strong>
-            </p>
-          )}
+        {["video", "audio"].includes(content.type) && content.durationFormatted && (
+  <p className="text-sm text-gray-600 mt-1">
+    Duration: <strong>{content.durationFormatted}</strong>
+  </p>
+)}
 
           <button
             onClick={onRemove}
